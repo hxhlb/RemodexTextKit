@@ -65,7 +65,7 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
       .customAttribute(TextFragmentAttribute())
       .onGeometryChange(for: CGSize?.self, of: \.textContainerSize) { size in
         guard let size, let textBuilder else { return }
-        textBuilder.sizeChanged(size, environment: textEnvironment)
+        textBuilder.sizeChangedIfNeeded(size, environment: textEnvironment)
       }
       .onChange(of: content, initial: true) { _, newValue in
         self.textBuilder = TextBuilder(newValue, environment: textEnvironment)
