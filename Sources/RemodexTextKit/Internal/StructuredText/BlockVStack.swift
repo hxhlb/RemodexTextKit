@@ -159,6 +159,26 @@ extension StructuredText {
         }
       }
     }
+
+    func explicitAlignment(
+      of guide: HorizontalAlignment,
+      in bounds: CGRect,
+      proposal: ProposedViewSize,
+      subviews: Subviews,
+      cache: inout Cache
+    ) -> CGFloat? {
+      nil
+    }
+
+    func explicitAlignment(
+      of guide: VerticalAlignment,
+      in bounds: CGRect,
+      proposal: ProposedViewSize,
+      subviews: Subviews,
+      cache: inout Cache
+    ) -> CGFloat? {
+      nil
+    }
   }
 }
 
