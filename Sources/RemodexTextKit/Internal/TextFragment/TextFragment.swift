@@ -19,8 +19,8 @@ import SwiftUI
 // coordinate space isolation and keep scrollable regions interactive.
 //
 // An ancestor view must define a named coordinate space (.textContainer) for the text
-// container. TextFragment uses onGeometryChange to observe the container size and rebuild
-// Text when attachment sizes need to change.
+// container. TextFragment observes the container size and rebuilds Text when attachment
+// sizes need to change.
 //
 // TextFragment is used by InlineText and StructuredText (via BlockContent) to render
 // attributed content with inline attachments, links, and selection.
@@ -31,9 +31,11 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
   @State private var textBuilder: TextBuilder?
 
   private let content: Content
+  private let attachments: Set<AnyAttachment>
 
   init(_ content: Content) {
     self.content = content
+    self.attachments = content.attachments()
   }
 
   @ViewBuilder
@@ -63,15 +65,17 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
   private var swiftUITextFragment: some View {
     text
       .customAttribute(TextFragmentAttribute())
-      .onGeometryChange(for: CGSize?.self, of: \.textContainerSize) { size in
-        guard let size, let textBuilder else { return }
+      .modifier(TextContainerSizeObserver(isEnabled: !attachments.isEmpty) { size in
+        guard let textBuilder else {
+          return
+        }
         textBuilder.sizeChangedIfNeeded(size, environment: textEnvironment)
-      }
+      })
       .onChange(of: content, initial: true) { _, newValue in
         self.textBuilder = TextBuilder(newValue, environment: textEnvironment)
       }
       .modifier(TextSelectionBackground())
-      .modifier(AttachmentOverlay(attachments: content.attachments()))
+      .modifier(AttachmentOverlay(attachments: attachments))
       .modifier(TextLinkInteraction())
   }
 
@@ -93,6 +97,65 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
 }
 
 struct TextFragmentAttribute: TextAttribute {
+}
+
+private struct TextContainerSizeObserver: ViewModifier {
+  let isEnabled: Bool
+  let onChange: @MainActor (CGSize) -> Void
+
+  func body(content: Content) -> some View {
+    if isEnabled {
+      content.background(TextContainerSizeReader(onChange: onChange))
+    } else {
+      content
+    }
+  }
+}
+
+private struct TextContainerSizeReader: View {
+  let onChange: @MainActor (CGSize) -> Void
+
+  var body: some View {
+    GeometryReader { geometry in
+      let size = geometry.textContainerSize
+      let sizeID = TextContainerSizeChangeID(size)
+
+      Color.clear
+        .onChange(of: sizeID, initial: true) { _, _ in
+          report(size)
+        }
+    }
+  }
+
+  @MainActor
+  private func report(_ size: CGSize?) {
+    guard let size else {
+      return
+    }
+    onChange(size)
+  }
+}
+
+private struct TextContainerSizeChangeID: Equatable {
+  let width: Int
+  let height: Int
+
+  init(_ size: CGSize?) {
+    guard let size else {
+      self.width = -1
+      self.height = -1
+      return
+    }
+
+    guard size.width.isFinite, size.height.isFinite else {
+      self.width = -1
+      self.height = -1
+      return
+    }
+
+    self.width = Int(size.width.rounded(.toNearestOrAwayFromZero))
+    self.height = Int(size.height.rounded(.toNearestOrAwayFromZero))
+  }
 }
 
 extension Text.Layout {
