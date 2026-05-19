@@ -66,19 +66,37 @@ public struct Overflow<Content: View>: View {
           Color.clear
             .frame(minHeight: contentHeight)
           content(.scroll(containerWidth: containerWidth))
-            .onGeometryChange(for: CGFloat.self, of: \.size.height) {
-              contentHeight = $0
-            }
+            .background(
+              GeometryReader { geometry in
+                let height = geometry.size.height
+
+                Color.clear
+                  .task(id: RoundedGeometryValue(height)) {
+                    await MainActor.run {
+                      updateContentHeight(height)
+                    }
+                  }
+              }
+            )
             // Make text selection local in scrollable regions
             .modifier(TextSelectionInteraction())
             .transformPreference(Text.LayoutKey.self) { value in
               value = []
-            }
+          }
         }
       }
-      .onScrollGeometryChange(for: CGFloat.self, of: \.containerSize.width) {
-        containerWidth = $1
-      }
+      .background(
+        GeometryReader { geometry in
+          let width = geometry.size.width
+
+          Color.clear
+            .task(id: RoundedGeometryValue(width)) {
+              await MainActor.run {
+                updateContainerWidth(width)
+              }
+            }
+        }
+      )
       // Propagate gesture exclusion area
       .background(
         GeometryReader { geometry in
@@ -90,6 +108,37 @@ public struct Overflow<Content: View>: View {
         }
       )
     }
+  }
+
+  private func updateContentHeight(_ height: CGFloat) {
+    guard height.isFinite,
+          height > 0,
+          abs(height - (contentHeight ?? 0)) > 0.5 else {
+      return
+    }
+    contentHeight = height
+  }
+
+  private func updateContainerWidth(_ width: CGFloat) {
+    guard width.isFinite,
+          width > 0,
+          abs(width - (containerWidth ?? 0)) > 0.5 else {
+      return
+    }
+    containerWidth = width
+  }
+}
+
+private struct RoundedGeometryValue: Equatable {
+  let value: Int
+
+  init(_ value: CGFloat) {
+    guard value.isFinite else {
+      self.value = -1
+      return
+    }
+
+    self.value = Int(value.rounded(.toNearestOrAwayFromZero))
   }
 }
 
